@@ -164,14 +164,16 @@ func runTests(cacheDir string, pkgs []*pkgConfig) error {
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
+		fmt.Println("$:", cmd)
 		if err := cmd.Run(); err != nil {
 			return err
 		}
 	}
 
 	workDir := path.Join(tt.SourceDir, pkgs[0].GoModDir[len(pkgs[0].MountDir):])
+	_ = exec.Command("docker", "rm", "--force", imgName).Run()
 	args := []string{
-		"run", "-i", "-t", "--rm",
+		"run", "-i", "-t",
 		"--name", imgName,
 		"-v", pkgs[0].MountDir + ":" + tt.SourceDir + ":cached",
 		"-v", cacheDir + ":" + tt.CacheDir + ":delegated",
@@ -210,7 +212,7 @@ func runTests(cacheDir string, pkgs []*pkgConfig) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	if *verbose {
-		fmt.Println("$:", "docker", strings.Join(args, " "))
+		fmt.Println("$:", cmd)
 	}
 	return cmd.Run()
 }
@@ -236,6 +238,9 @@ func main() {
 	cacheDir := path.Join(homeDir, ".tt_cache") // TODO(zviad): make this configurable?
 	exitCode := 0
 	for _, pkgs := range pkgGroups {
+		if len(pkgGroups) > 0 {
+			fmt.Println("Module:", pkgs[0].ModPath)
+		}
 		err := runTests(cacheDir, pkgs)
 		if err != nil {
 			exitCode = 1
