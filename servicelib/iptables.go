@@ -9,15 +9,14 @@ import (
 	"github.com/zviadm/zlog"
 )
 
-// List rules: iptables --list -n
-// Add rule: iptables -I INPUT -p tcp --dport 5005 -i lo -j DROP
-// Del rule: iptables -D INPUT 1
-
+// Clear all rules. Tests that mess with Iptables, should run
+// `defer servicelib.IptablesClearAll()` call at the beginning of the test function.
 func IptablesClearAll(t *testing.T) {
 	out, err := exec.Command("iptables", "-F").CombinedOutput()
 	require.NoError(t, err, string(out))
 }
 
+// Blocks any incoming traffic to a given port on loopback interface.
 func IptablesBlockPort(t *testing.T, port int) {
 	zlog.Info("TEST: iptables: blocking port ", port)
 	out, err := exec.Command(
@@ -27,8 +26,9 @@ func IptablesBlockPort(t *testing.T, port int) {
 	require.NoError(t, err, string(out))
 }
 
-func IptablesUnblockPort(t *testing.T, port int) {
-	zlog.Info("TEST: iptables: unblocking port ", port)
-	out, err := exec.Command("iptables", "-D", "INPUT", "1").CombinedOutput()
-	require.NoError(t, err, string(out))
-}
+// TODO(zviad): actually implement unblock.
+// func IptablesUnblockPort(t *testing.T, port int) {
+// 	zlog.Info("TEST: iptables: unblocking port ", port)
+// 	out, err := exec.Command("iptables", "-D", "INPUT", "1").CombinedOutput()
+// 	require.NoError(t, err, string(out))
+// }

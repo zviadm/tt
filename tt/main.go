@@ -12,13 +12,14 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/zviadm/walle/tt"
+	"github.com/zviadm/tt"
 	"golang.org/x/mod/modfile"
 )
 
 var (
 	verbose   = flag.Bool("v", false, "verbose output")
-	maxMemory = flag.String("tt.memory", "1gb", "memory limit passed to docker run command")
+	ttMemory  = flag.String("tt.memory", "1gb", "memory limit passed to docker run command")
+	ttRebuild = flag.Bool("tt.rebuild", false, "if true, will rebuild docker image")
 
 	// go test flags
 	runFlag   = flag.String("run", "", "see: go help testflag")
@@ -98,16 +99,35 @@ func findPkgGroups(pkgs []string) (map[string][]*pkgConfig, error) {
 }
 
 func runTests(cacheDir string, pkgs []*pkgConfig) error {
-	workDir := path.Join(tt.SourceDir, pkgs[0].GoModDir[len(pkgs[0].MountDir):])
 	imgName := "tt-" + path.Base(pkgs[0].ModPath)
+	if !*ttRebuild {
+		out, err := exec.Command("docker", "images", "-q", imgName).CombinedOutput()
+		if err != nil {
+			return err
+		}
+		if len(out) == 0 {
+			*ttRebuild = true
+		}
+	}
+	if *ttRebuild {
+		cmd := exec.Command("docker", "build", "-t", imgName, "-f", "tt.Dockerfile", pkgs[0].GoModDir)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	}
+
+	workDir := path.Join(tt.SourceDir, pkgs[0].GoModDir[len(pkgs[0].MountDir):])
 	args := []string{
 		"run", "-i", "-t", "--rm",
 		"--name", imgName,
 		"-v", pkgs[0].MountDir + ":" + tt.SourceDir + ":cached",
 		"-v", cacheDir + ":" + tt.CacheDir + ":delegated",
 		"-w", workDir,
-		"--memory", *maxMemory,
-		"--memory-swap", *maxMemory,
+		"--memory", *ttMemory,
+		"--memory-swap", *ttMemory,
 		"--cap-add", "NET_ADMIN",
 		imgName + ":latest",
 		tt.GoBin(pkgs[0].GoVersion),

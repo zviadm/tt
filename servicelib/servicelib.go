@@ -59,7 +59,7 @@ func installPkg(pkg string) error {
 	if _, ok := pkgsInstalled[pkg]; ok {
 		return nil
 	}
-	cmd := exec.Command(path.Join("/root", goVer, "bin/go"), "install", pkg)
+	cmd := exec.Command(tt.GoBin(goVer), "install", pkg)
 	zlog.Infof("running: %s", cmd)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
