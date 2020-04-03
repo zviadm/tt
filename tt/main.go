@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -32,6 +33,7 @@ var (
 type pkgConfig struct {
 	MountDir     string
 	GoModDir     string // Parent path that contains go.mod file
+	TTDockerDir  string
 	RelativePath string // Relative path from GoModDir
 
 	ModPath   string // Go module path
@@ -52,8 +54,14 @@ func pkgConfigFor(pkg string) (*pkgConfig, error) {
 				cfg.RelativePath = "." + pkgD[len(d):]
 			}
 		}
+		if cfg.TTDockerDir == "" {
+			if _, err := os.Stat(path.Join(d, "tt.Dockerfile")); !os.IsNotExist(err) {
+				cfg.TTDockerDir = d
+			}
+		}
 		if _, err := os.Stat(path.Join(d, ".git")); !os.IsNotExist(err) {
 			cfg.MountDir = d
+			break
 		}
 		if d == "/" {
 			break
@@ -86,16 +94,58 @@ func pkgConfigFor(pkg string) (*pkgConfig, error) {
 	return cfg, nil
 }
 
-func findPkgGroups(pkgs []string) (map[string][]*pkgConfig, error) {
+func findPkgGroups(pkgs []string) ([][]*pkgConfig, error) {
 	pkgGroups := make(map[string][]*pkgConfig)
 	for _, pkg := range pkgs {
-		cfg, err := pkgConfigFor(pkg)
-		if err != nil {
-			return nil, err
+		if strings.HasSuffix(pkg, "/...") || pkg == "..." {
+			pathToExpand, err := filepath.Abs(pkg[:len(pkg)-3])
+			if err != nil {
+				return nil, err
+			}
+			var goModPaths []string
+			err = filepath.Walk(
+				pathToExpand,
+				func(p string, info os.FileInfo, err error) error {
+					if err != nil {
+						return err
+					}
+					if info.IsDir() {
+						return nil
+					}
+					if info.Name() != "go.mod" {
+						return nil
+					}
+					goModPaths = append(goModPaths, path.Dir(p))
+					return nil
+				})
+			if err != nil {
+				return nil, err
+			}
+			for _, goModPath := range goModPaths {
+				cfg, err := pkgConfigFor(path.Join(goModPath, "..."))
+				if err != nil {
+					return nil, err
+				}
+				pkgGroups[cfg.ModPath] = append(pkgGroups[cfg.ModPath], cfg)
+			}
+		} else {
+			cfg, err := pkgConfigFor(pkg)
+			if err != nil {
+				return nil, err
+			}
+			pkgGroups[cfg.ModPath] = append(pkgGroups[cfg.ModPath], cfg)
 		}
-		pkgGroups[cfg.ModPath] = append(pkgGroups[cfg.ModPath], cfg)
 	}
-	return pkgGroups, nil
+	modules := make(sort.StringSlice, 0, len(pkgGroups))
+	for modPath := range pkgGroups {
+		modules = append(modules, modPath)
+	}
+	modules.Sort()
+	r := make([][]*pkgConfig, len(modules))
+	for idx, modPath := range modules {
+		r[idx] = pkgGroups[modPath]
+	}
+	return r, nil
 }
 
 func runTests(cacheDir string, pkgs []*pkgConfig) error {
@@ -110,7 +160,7 @@ func runTests(cacheDir string, pkgs []*pkgConfig) error {
 		}
 	}
 	if *ttRebuild {
-		cmd := exec.Command("docker", "build", "-t", imgName, "-f", "tt.Dockerfile", pkgs[0].GoModDir)
+		cmd := exec.Command("docker", "build", "-t", imgName, "-f", "tt.Dockerfile", pkgs[0].TTDockerDir)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
