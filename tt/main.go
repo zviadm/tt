@@ -103,17 +103,14 @@ func findPkgGroups(pkgs []string) ([][]*pkgConfig, error) {
 			if err != nil {
 				return nil, err
 			}
-			var goModPaths []string
+			goModPaths := []string{pathToExpand}
 			err = filepath.Walk(
 				pathToExpand,
 				func(p string, info os.FileInfo, err error) error {
 					if err != nil {
 						return err
 					}
-					if info.IsDir() {
-						return nil
-					}
-					if info.Name() != "go.mod" {
+					if info.IsDir() || info.Name() != "go.mod" || path.Dir(p) == pathToExpand {
 						return nil
 					}
 					goModPaths = append(goModPaths, path.Dir(p))
