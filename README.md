@@ -1,4 +1,5 @@
 # tt - Simple integration testing for GO code
+[![Build Status](https://travis-ci.org/zviadm/tt.svg?branch=master)](https://travis-ci.org/zviadm/tt)
 
 `tt` is a tool to write and run both simple and complex tests for GO projects. `tt` requires almost no configuration and works with standard go module setup.
 
