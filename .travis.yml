@@ -8,6 +8,7 @@ services:
 
 install:
   - docker pull thezviad/tt-tt || true
+  - docker tag thezviad/tt-tt tt-tt || true
   - go install github.com/zviadm/tt/tt
 
 script:
