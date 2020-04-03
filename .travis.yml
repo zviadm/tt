@@ -6,7 +6,7 @@ go:
 services:
   - docker
 
-before_install:
+install:
 - go install github.com/zviadm/tt/tt
 
 script:
