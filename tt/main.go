@@ -33,7 +33,7 @@ var (
 type pkgConfig struct {
 	MountDir     string
 	GoModDir     string // Parent path that contains go.mod file
-	TTDockerDir  string
+	TTDockerfile string
 	RelativePath string // Relative path from GoModDir
 
 	ModPath   string // Go module path
@@ -54,9 +54,10 @@ func pkgConfigFor(pkg string) (*pkgConfig, error) {
 				cfg.RelativePath = "." + pkgD[len(d):]
 			}
 		}
-		if cfg.TTDockerDir == "" {
-			if _, err := os.Stat(path.Join(d, "tt.Dockerfile")); !os.IsNotExist(err) {
-				cfg.TTDockerDir = d
+		if cfg.TTDockerfile == "" {
+			dockerfile := path.Join(d, "tt.Dockerfile")
+			if _, err := os.Stat(dockerfile); !os.IsNotExist(err) {
+				cfg.TTDockerfile = dockerfile
 			}
 		}
 		if _, err := os.Stat(path.Join(d, ".git")); !os.IsNotExist(err) {
@@ -160,11 +161,15 @@ func runTests(cacheDir string, pkgs []*pkgConfig) error {
 		}
 	}
 	if *ttRebuild {
-		cmd := exec.Command("docker", "build", "-t", imgName, "-f", "tt.Dockerfile", pkgs[0].TTDockerDir)
+		cmd := exec.Command("docker", "build", "-t", imgName, "-f", pkgs[0].TTDockerfile, ".")
 		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		fmt.Println("$:", cmd)
+		if *verbose {
+			cmd.Stdout = os.Stdout
+			cmd.Stderr = os.Stderr
+			fmt.Println("$:", cmd)
+		} else {
+			fmt.Println("building:", imgName, "from", pkgs[0].TTDockerfile, "...")
+		}
 		if err := cmd.Run(); err != nil {
 			return err
 		}
