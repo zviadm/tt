@@ -106,8 +106,8 @@ func KillAll() {
 }
 
 func (s *Service) Start(ctx context.Context) error {
-	if s.State() != nil {
-		return errors.Errorf("process still running")
+	if s.State() == nil {
+		return errors.Errorf("process is still running")
 	}
 
 	cmd := exec.Command(path.Join("/root/.cache/goroot/bin", path.Base(s.pkg)), s.flags...)
