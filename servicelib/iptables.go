@@ -3,32 +3,36 @@ package servicelib
 import (
 	"os/exec"
 	"strconv"
-	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/pkg/errors"
 	"github.com/zviadm/zlog"
 )
 
 // Clear all rules. Tests that mess with Iptables, should run
 // `defer servicelib.IptablesClearAll()` call at the beginning of the test function.
-func IptablesClearAll(t *testing.T) {
+func IptablesClearAll() error {
 	out, err := exec.Command("iptables", "-F").CombinedOutput()
-	require.NoError(t, err, string(out))
+	if err != nil {
+		return errors.Errorf("%s\n%s", err, out)
+	}
+	return nil
 }
 
 // Blocks any incoming traffic to a given port on loopback interface.
-func IptablesBlockPort(t *testing.T, port int) {
+func IptablesBlockPort(port int) error {
 	zlog.Info("TEST: iptables: blocking port ", port)
 	out, err := exec.Command(
 		"iptables", "-I", "INPUT",
 		"-p", "tcp", "--dport", strconv.Itoa(port),
 		"-i", "lo", "-j", "DROP").CombinedOutput()
-	require.NoError(t, err, string(out))
+	if err != nil {
+		return errors.Errorf("%s\n%s", err, out)
+	}
+	return nil
 }
 
 // TODO(zviad): actually implement unblock.
-// func IptablesUnblockPort(t *testing.T, port int) {
+// func IptablesUnblockPort(port int) error {
 // 	zlog.Info("TEST: iptables: unblocking port ", port)
 // 	out, err := exec.Command("iptables", "-D", "INPUT", "1").CombinedOutput()
-// 	require.NoError(t, err, string(out))
 // }

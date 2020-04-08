@@ -10,9 +10,8 @@ import (
 	"runtime"
 	"sync"
 	"syscall"
-	"testing"
 
-	"github.com/stretchr/testify/require"
+	"github.com/pkg/errors"
 	"github.com/zviadm/tt"
 	"github.com/zviadm/zlog"
 )
@@ -73,15 +72,14 @@ func installPkg(pkg string) error {
 }
 
 func RunGoService(
-	t *testing.T,
 	ctx context.Context,
 	pkg string,
 	flags []string,
-	port string) *Service {
+	port string) (*Service, error) {
 
-	err := installPkg(pkg)
-	require.NoError(t, err)
-
+	if err := installPkg(pkg); err != nil {
+		return nil, err
+	}
 	s := &Service{
 		pkg:   pkg,
 		flags: flags,
@@ -90,23 +88,27 @@ func RunGoService(
 		cv:           sync.NewCond(new(sync.Mutex)),
 		processState: &os.ProcessState{},
 	}
-	s.Start(t, ctx)
+	if err := s.Start(ctx); err != nil {
+		return nil, err
+	}
 	runningMx.Lock()
 	defer runningMx.Unlock()
 	runningServices = append(runningServices, s)
-	return s
+	return s, nil
 }
 
-func KillAll(t *testing.T) {
+func KillAll() {
 	runningMx.Lock()
 	defer runningMx.Unlock()
 	for idx := len(runningServices) - 1; idx >= 0; idx-- {
-		runningServices[idx].Kill(t)
+		runningServices[idx].Kill()
 	}
 }
 
-func (s *Service) Start(t *testing.T, ctx context.Context) {
-	require.NotNil(t, s.State())
+func (s *Service) Start(ctx context.Context) error {
+	if s.State() != nil {
+		return errors.Errorf("process still running")
+	}
 
 	cmd := exec.Command(path.Join("/root/.cache/goroot/bin", path.Base(s.pkg)), s.flags...)
 	zlog.Infof("running: %s", cmd)
@@ -118,8 +120,9 @@ func (s *Service) Start(t *testing.T, ctx context.Context) {
 	s.processState = nil
 	s.cv.L.Unlock()
 
-	err := cmd.Start()
-	require.NoError(t, err)
+	if err := cmd.Start(); err != nil {
+		return err
+	}
 	go func() {
 		<-ctx.Done()
 		cmd.Process.Kill()
@@ -137,9 +140,10 @@ func (s *Service) Start(t *testing.T, ctx context.Context) {
 	if s.port != "" {
 		if err := s.waitForPort(ctx, s.port); err != nil {
 			_ = s.cmd.Process.Kill()
-			require.NoError(t, err)
+			return err
 		}
 	}
+	return nil
 }
 
 func (s *Service) State() *os.ProcessState {
@@ -147,7 +151,7 @@ func (s *Service) State() *os.ProcessState {
 	defer s.cv.L.Unlock()
 	return s.processState
 }
-func (s *Service) wait() int {
+func (s *Service) Wait() int {
 	s.cv.L.Lock()
 	defer s.cv.L.Unlock()
 	for s.processState == nil {
@@ -155,24 +159,18 @@ func (s *Service) wait() int {
 	}
 	return s.processState.ExitCode()
 }
-func (s *Service) Wait(t *testing.T) {
-	eCode := s.wait()
-	require.EqualValues(t, 0, eCode)
-}
-func (s *Service) Stop(t *testing.T) {
+func (s *Service) Stop() int {
 	if s.State() == nil {
-		err := s.cmd.Process.Signal(syscall.SIGTERM)
-		require.NoError(t, err)
+		_ = s.cmd.Process.Signal(syscall.SIGTERM)
 	}
-	s.Wait(t)
+	return s.Wait()
 }
-func (s *Service) Kill(t *testing.T) {
+func (s *Service) Kill() {
 	if s.State() != nil {
 		return
 	}
-	err := s.cmd.Process.Kill()
-	require.NoError(t, err)
-	_ = s.wait()
+	_ = s.cmd.Process.Kill()
+	_ = s.Wait()
 }
 
 func (s *Service) waitForPort(ctx context.Context, port string) error {
