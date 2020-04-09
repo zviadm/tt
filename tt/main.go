@@ -183,6 +183,7 @@ func runTests(cacheDir string, pkgs []*pkgConfig) error {
 		"--memory", *ttMemory,
 		"--memory-swap", *ttMemory,
 		"--cap-add", "NET_ADMIN",
+		"--env", "GODEBUG=cgocheck=2",
 		imgName + ":latest",
 		tt.GoBin(pkgs[0].GoVersion),
 		"test", "-p", "1", "-failfast",
