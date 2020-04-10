@@ -122,7 +122,7 @@ func findPkgGroups(pkgs []string) ([][]*pkgConfig, error) {
 			for _, goModPath := range goModPaths {
 				cfg, err := pkgConfigFor(path.Join(goModPath, "..."))
 				if err != nil {
-					return nil, err
+					continue
 				}
 				pkgGroups[cfg.ModPath] = append(pkgGroups[cfg.ModPath], cfg)
 			}
